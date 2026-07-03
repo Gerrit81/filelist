@@ -59,7 +59,9 @@ function getDefaultConfig() {
         'session_dir' => __DIR__ . DIRECTORY_SEPARATOR . 'session',
         'max_upload_size' => 0,
         'hidden_files' => array(),
-        'app_version' => '2.0.8',
+        'app_version' => '2.5.0',
+        'icon_scheme' => 'emoji',
+        'svg_icon_style' => 'material',
         'office_preview_mode' => 'off',
         'libreoffice_path' => '',
         'office_preview_api' => '',
@@ -371,18 +373,16 @@ function sysToUtf8($str) {
 }
 
 function safeBasename($filePath) {
-    // basename() 在混合分隔符路径下行为可能不一致，此处做二次清洗
-    $name = basename($filePath);
-    // Windows 下 basename() 返回系统编码（GBK），转为 UTF-8
+    $normalized = str_replace('\\', '/', $filePath);
+    $parts = explode('/', $normalized);
+    $name = end($parts);
     $name = sysToUtf8($name);
-    // 移除所有路径分隔符残留（反斜杠、正斜杠）
-    $name = str_replace(array('\\', '/'), '_', $name);
     return $name;
 }
 
-function getFileInfo($filePath, $relativePath) {
+function getFileInfo($filePath, $relativePath, $displayName = null) {
     $info = array();
-    $info['name'] = safeBasename($filePath);
+    $info['name'] = $displayName !== null ? $displayName : safeBasename($filePath);
     $info['path'] = $relativePath;
     
     // 一次 stat() 获取所有文件元信息，避免三次独立 I/O 调用
@@ -543,7 +543,7 @@ function scanDirectory($relativePath) {
             continue;
         }
         
-        $files[] = getFileInfo($filePath, $fileRelativePath);
+        $files[] = getFileInfo($filePath, $fileRelativePath, $file);
     }
     
     closedir($dh);
@@ -561,7 +561,7 @@ function scanDirectory($relativePath) {
 // 带缓存的目录扫描 —— 缓存 key = md5(CACHE_VERSION + data_dir + relativePath)
 // CACHE_VERSION 在数据结构或文件路径处理逻辑变更时手动递增，
 // 以确保所有旧缓存自动失效
-define('CACHE_VERSION', '4');
+define('CACHE_VERSION', '5');
 
 function scanDirectoryCached($relativePath) {
     $fullPath = getFullPath($relativePath);
