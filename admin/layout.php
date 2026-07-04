@@ -126,6 +126,19 @@ $pageTitle = isset($pageTitle) ? $pageTitle : '管理后台';
         .file-row td:first-child input[type="checkbox"] { width: 16px; height: 16px; accent-color: #667eea; cursor: pointer; }
         table thead th input[type="checkbox"] { width: 16px; height: 16px; accent-color: #667eea; cursor: pointer; }
 
+        /* 文件管理表格 - 固定布局，防止长文件名撑开错位 */
+        .file-admin-table { table-layout: fixed; }
+        .file-name-col { min-width: 0; }
+        .file-name-td { overflow: hidden; }
+        .file-admin-name {
+            display: block;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .file-admin-name-dir { font-weight: 600; color: #667eea; text-decoration: none; }
+        .file-admin-name-dir:hover { text-decoration: underline; color: #5a6fd6; }
+
         /* 面包屑（文件管理用） */
         .breadcrumbs { margin-bottom: 12px; }
         .breadcrumbs ul { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0; }

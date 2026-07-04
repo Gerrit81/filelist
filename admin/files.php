@@ -251,16 +251,16 @@ if (!empty($currentPath)) {
                 <div class="msg-<?php echo $messageType; ?>"><?php echo htmlspecialchars($message); ?></div>
             <?php endif; ?>
 
-            <table>
+            <table class="file-admin-table">
                 <thead>
                     <tr>
                         <?php if (hasPermission('files_delete')): ?>
                         <th style="width:40px;"><input type="checkbox" id="selectAll" title="全选/取消"></th>
                         <?php endif; ?>
-                        <th>名称</th>
-                        <th style="width:100px;">大小</th>
-                        <th style="width:150px;">修改时间</th>
-                        <th style="width:180px;">操作</th>
+                        <th class="file-name-col">名称</th>
+                        <th style="width:110px;">大小</th>
+                        <th style="width:170px;">修改时间</th>
+                        <th style="width:195px;">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -272,11 +272,11 @@ if (!empty($currentPath)) {
                             <?php if (hasPermission('files_delete')): ?>
                             <td style="text-align:center;"><input type="checkbox" class="item-check" data-path="<?php echo htmlspecialchars($item['path']); ?>" data-name="<?php echo htmlspecialchars($item['name']); ?>"></td>
                             <?php endif; ?>
-                            <td>
+                            <td class="file-name-td">
                                 <?php if ($item['type'] === 'dir'): ?>
-                                    <a href="?path=<?php echo urlencode($item['path']); ?>" style="font-weight:600;color:#667eea;">📁 <?php echo htmlspecialchars($item['name']); ?>/</a>
+                                    <a class="file-admin-name file-admin-name-dir" href="?path=<?php echo urlencode($item['path']); ?>">📁 <?php echo htmlspecialchars($item['name']); ?>/</a>
                                 <?php else: ?>
-                                    📄 <?php echo htmlspecialchars($item['name']); ?>
+                                    <span class="file-admin-name file-admin-name-file">📄 <?php echo htmlspecialchars($item['name']); ?></span>
                                 <?php endif; ?>
                             </td>
                             <td style="font-size:13px;color:#888;"><?php echo $item['type'] === 'dir' ? '-' : formatSize($item['size']); ?></td>
