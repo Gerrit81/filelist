@@ -204,6 +204,19 @@ switch ($action) {
         header('Cache-Control: private, max-age=5');
         echo json_encode($files);
         exit;
+
+    case 'search':
+        $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
+        if (mb_strlen($keyword) < 1) {
+            header('Content-Type: application/json');
+            echo json_encode([]);
+            exit;
+        }
+        $results = recursiveSearch($keyword);
+        header('Content-Type: application/json');
+        header('Cache-Control: private, max-age=10');
+        echo json_encode($results);
+        exit;
     
     case 'preview':
         serveFile(getFullPath($path), false);

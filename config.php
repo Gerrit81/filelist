@@ -7,7 +7,7 @@ return array(
     'session_dir' => __DIR__ . DIRECTORY_SEPARATOR . 'session',
     'max_upload_size' => 0,
     'hidden_files' => array(),
-    'app_version' => '2.5.0',
+    'app_version' => '2.8.2',
     'icon_scheme' => 'emoji',
     'svg_icon_style' => 'material',
     'office_preview_mode' => 'off',

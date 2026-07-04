@@ -32,7 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 unlink($fullPath);
             }
-            $message = '已删除：' . basename($fullPath);
+            $message = '已删除：' . safeBasename($fullPath);
             clearDirCache($currentPath);
             clearStatsCache();
         } else {

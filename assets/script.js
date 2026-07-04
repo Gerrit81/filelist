@@ -22,8 +22,9 @@
     let allFiles = [];
     let sortField = localStorage.getItem('filelist_sort_field') || 'name';
     let sortOrder = localStorage.getItem('filelist_sort_order') || 'asc';
-    const iconScheme = body.dataset.iconScheme || 'emoji';
+    let iconScheme = localStorage.getItem('filelist-icon-scheme') || body.dataset.iconScheme || 'emoji';
     let svgIconStyle = localStorage.getItem('filelist-svg-icon-style') || body.dataset.svgIconStyle || 'material';
+    let isSearchMode = false;
 
     function formatSize(bytes) {
         if (bytes === 0) return '0 B';
@@ -35,7 +36,7 @@
     function getFileIcon(file) {
         switch (iconScheme) {
             case 'svg': return getSvgIcon(file);
-            case 'fontawesome': return getFaIcon(file);
+            case 'fontawesome': return getSvgIcon(file); // 已移除 Font Awesome，自动回退到 SVG
             case 'css': return getCssIcon(file);
             default: return getEmojiIcon(file);
         }
@@ -230,26 +231,7 @@
         return '<span class="file-icon fi-svg-icon">' + svgWrap(icons[key]) + '</span>';
     }
 
-    /* ========== 方案三：Font Awesome ========== */
-    function getFaIcon(file) {
-        if (file.type === 'dir') return '<span class="file-icon fi-fa-dir"><i class="fas fa-folder"></i></span>';
-        if (isImage(file)) return '<span class="file-icon fi-fa-img"><i class="fas fa-image"></i></span>';
-        if (isVideo(file)) return '<span class="file-icon fi-fa-vid"><i class="fas fa-video"></i></span>';
-        if (isAudio(file)) return '<span class="file-icon fi-fa-aud"><i class="fas fa-music"></i></span>';
-        if (file.mime === 'application/pdf') return '<span class="file-icon fi-fa-pdf"><i class="fas fa-file-pdf"></i></span>';
-        if (isOffice(file)) {
-            var ext = (file.ext || '').toLowerCase();
-            if (ext.startsWith('doc')) return '<span class="file-icon fi-fa-doc"><i class="fas fa-file-word"></i></span>';
-            if (ext.startsWith('xls')) return '<span class="file-icon fi-fa-xls"><i class="fas fa-file-excel"></i></span>';
-            if (ext.startsWith('ppt')) return '<span class="file-icon fi-fa-ppt"><i class="fas fa-file-powerpoint"></i></span>';
-            return '<span class="file-icon fi-fa-file"><i class="fas fa-file"></i></span>';
-        }
-        if (file.is_code) return '<span class="file-icon fi-fa-code"><i class="fas fa-code"></i></span>';
-        if (file.is_text) return '<span class="file-icon fi-fa-txt"><i class="fas fa-file-alt"></i></span>';
-        return '<span class="file-icon fi-fa-file"><i class="fas fa-file"></i></span>';
-    }
-
-    /* ========== 方案四：CSS 纯样式 ========== */
+    /* ========== 方案三：CSS 纯样式 ========== */
     function getCssIcon(file) {
         if (file.type === 'dir') return '<span class="file-icon fi-css fi-css-dir"></span>';
         if (isImage(file)) return '<span class="file-icon fi-css fi-css-img"></span>';
@@ -332,7 +314,18 @@
             const nameClass = file.type === 'dir' ? 'folder' : '';
             const fileName = document.createElement('span');
             fileName.className = 'file-name ' + nameClass;
-            fileName.textContent = file.name;
+
+            // 搜索模式下，显示子目录路径前缀
+            if (isSearchMode) {
+                const pathParts = file.path.split('/');
+                if (pathParts.length > 1) {
+                    const dirPrefix = document.createElement('span');
+                    dirPrefix.className = 'search-path-prefix';
+                    dirPrefix.textContent = pathParts.slice(0, -1).join('/') + '/';
+                    fileName.appendChild(dirPrefix);
+                }
+            }
+            fileName.appendChild(document.createTextNode(file.name));
 
             if (isImage(file)) {
                 fileName.dataset.imagePath = encodeURIComponent(file.path);
@@ -613,6 +606,28 @@
         }
     }
 
+    // 判断字符串首字符类别：0=符号，1=英文/数字，2=中文
+    function charCategory(str) {
+        if (!str || str.length === 0) return 0;
+        const c = str.charAt(0);
+        if (/^[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]$/.test(c)) return 2; // 中文
+        if (/^[a-zA-Z0-9]$/.test(c)) return 1; // 英文/数字
+        return 0; // 符号
+    }
+
+    // 智能排序：符号 → 英文/数字 → 中文拼音，每类内部按各自规则排序
+    function smartStringCompare(a, b) {
+        const catA = charCategory(a);
+        const catB = charCategory(b);
+        if (catA !== catB) return catA - catB;
+        if (catA === 2) {
+            // 中文：按拼音排序
+            return a.toLowerCase().localeCompare(b.toLowerCase(), 'zh-CN');
+        }
+        // 英文/数字/符号：标准字母序
+        return a.toLowerCase().localeCompare(b.toLowerCase());
+    }
+
     function applySort() {
         sortableThs.forEach(th => {
             th.classList.remove('sorted-asc', 'sorted-desc');
@@ -629,8 +644,8 @@
             let aVal = a[sortField];
             let bVal = b[sortField];
             if (typeof aVal === 'string') {
-                aVal = aVal.toLowerCase();
-                bVal = bVal.toLowerCase();
+                const cmp = smartStringCompare(aVal, bVal);
+                return sortOrder === 'asc' ? cmp : -cmp;
             }
             if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
             if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
@@ -653,6 +668,7 @@
     }
 
     function loadFiles(path) {
+        isSearchMode = false;
         fileTableBody.innerHTML = '<tr><td colspan="5" class="loading">加载中</td></tr>';
         emptyState.style.display = 'none';
         document.querySelector('.file-table-wrapper').style.display = 'block';
@@ -673,15 +689,36 @@
     }
 
     function handleSearch() {
-        const keyword = searchInput.value.trim().toLowerCase();
+        const keyword = searchInput.value.trim();
         if (!keyword) {
-            applySort();
+            // 清空搜索 → 恢复当前目录
+            searchInput.value = '';
+            loadFiles(currentPath);
             return;
         }
-        const filtered = allFiles.filter(file =>
-            file.name.toLowerCase().includes(keyword)
-        );
-        renderFiles(filtered);
+
+        fileTableBody.innerHTML = '<tr><td colspan="5" class="loading">搜索中...</td></tr>';
+        emptyState.style.display = 'none';
+        document.querySelector('.file-table-wrapper').style.display = 'block';
+
+        fetch('?action=search&keyword=' + encodeURIComponent(keyword))
+            .then(response => response.json())
+            .then(files => {
+                isSearchMode = true;
+                if (files.error) {
+                    fileTableBody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">⚠️</div><h3>搜索出错</h3><p>' + files.error + '</p></td></tr>';
+                    return;
+                }
+                if (files.length === 0) {
+                    fileTableBody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">🔍</div><h3>未找到匹配项</h3><p>没有搜索到包含 "' + escHtml(keyword) + '" 的文件或目录</p></td></tr>';
+                    return;
+                }
+                allFiles = files;
+                applySort();
+            })
+            .catch(() => {
+                fileTableBody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">❌</div><h3>搜索失败</h3><p>无法完成搜索，请重试</p></td></tr>';
+            });
     }
 
     searchInput.addEventListener('keyup', (e) => {
@@ -881,14 +918,15 @@
     // SVG 图标风格
     const svgStyleSelect = document.getElementById('svgStyleSelect');
     function applySvgStyle(style) {
-        if (svgIconStyle === style) return;
+        if (svgIconStyle === style && iconScheme === 'svg') return;
         svgIconStyle = style;
+        iconScheme = 'svg';
         localStorage.setItem('filelist-svg-icon-style', style);
+        localStorage.setItem('filelist-icon-scheme', 'svg');
         if (svgStyleSelect) svgStyleSelect.value = style;
-        // 仅在 SVG 方案下重渲染
-        if (iconScheme === 'svg') {
-            applySort();
-        }
+        // 更新 body 属性，确保 CSS 变量/样式也同步
+        body.dataset.iconScheme = 'svg';
+        applySort();
     }
     if (svgStyleSelect) {
         svgStyleSelect.addEventListener('change', () => applySvgStyle(svgStyleSelect.value));

@@ -333,6 +333,18 @@ header p {
     color: var(--primary-color);
 }
 
+/* 搜索结果的子目录路径前缀 */
+.search-path-prefix {
+    color: #888;
+    font-weight: 400;
+    font-size: 12px;
+    margin-right: 2px;
+    opacity: 0.7;
+}
+body[data-theme="dark"] .search-path-prefix {
+    color: #999;
+}
+
 .file-size {
     white-space: nowrap;
     color: var(--text-secondary);
@@ -666,28 +678,7 @@ header p {
     transform: scale(1.1);
 }
 
-/* ========== Font Awesome 图标样式 ========== */
-.fi-fa-dir i { color: #FBBF24; }
-.fi-fa-img i { color: #60A5FA; }
-.fi-fa-vid i { color: #F87171; }
-.fi-fa-aud i { color: #A78BFA; }
-.fi-fa-pdf i { color: #EF4444; }
-.fi-fa-doc i { color: #3B82F6; }
-.fi-fa-xls i { color: #10B981; }
-.fi-fa-ppt i { color: #F97316; }
-.fi-fa-code i { color: #6366F1; }
-.fi-fa-txt i { color: #6B7280; }
-.fi-fa-file i { color: #9CA3AF; }
-[class^="fi-fa-"] {
-    font-size: 24px;
-    line-height: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    vertical-align: middle;
-    width: 32px;
-    height: 32px;
-}
+/* ========== SVG 内联图标样式 ========== */
 
 /* ========== CSS 纯样式图标 ========== */
 .fi-css {
@@ -1138,12 +1129,6 @@ footer p:first-child {
     .fi-svg-icon svg {
         width: 22px;
         height: 22px;
-    }
-
-    [class^="fi-fa-"] {
-        font-size: 18px;
-        width: 24px;
-        height: 24px;
     }
 
     .fi-css {

@@ -7,6 +7,111 @@ $pageTitle = '📋 更新日志';
 // 更新日志数据库 — 每次发版在此追加记录
 $changelog = array(
     array(
+        'version' => '2.8.2',
+        'date'    => '2026-07-04',
+        'changes' => array(
+            '🐛 修复排序规则：符号 → 英文 → 中文拼音，三段分层排序，中文不再跑到英文前面',
+        ),
+    ),
+    array(
+        'version' => '2.8.1',
+        'date'    => '2026-07-04',
+        'changes' => array(
+            '🐛 修复文件列表中文排序：Unicode 码点排序改为中文拼音排序（zh-CN locale）',
+        ),
+    ),
+    array(
+        'version' => '2.8.0',
+        'date'    => '2026-07-04',
+        'changes' => array(
+            '🗑️ 移除 Font Awesome 图标库（assets/fontawesome-free-6.4.0-web/），减少约 5MB 项目体积',
+            '🔥 图标方案从 4 种精简为 3 种（Emoji / SVG / CSS），已有 SVG 方案 7 套风格全面替代',
+            '🔄 向后兼容：已选 Font Awesome 的用户自动迁移为 SVG 方案',
+        ),
+    ),
+    array(
+        'version' => '2.7.0',
+        'date'    => '2026-07-04',
+        'changes' => array(
+            '🔍 新增递归搜索：遍历所有子目录匹配文件名（不区分大小写）',
+            '🔍 搜索结果自动显示子目录路径前缀，定位文件更直观',
+        ),
+    ),
+    array(
+        'version' => '2.6.1',
+        'date'    => '2026-07-03',
+        'changes' => array(
+            '🐛 修复前台个性化 SVG 图标风格切换无效，选择风格时自动切入 SVG 方案',
+            '🐛 修复 initAppDB() 幂等性，避免 Docker 容器首次启动时重复插入数据报错',
+            '🐛 修复 Docker 入口脚本在 Windows 上误将 config.json/app.db 建成目录的问题',
+        ),
+    ),
+    array(
+        'version' => '2.6.0',
+        'date'    => '2026-07-03',
+        'changes' => array(
+            '🐳 新增 Docker 容器化支持：Dockerfile + docker-compose.yml，一键部署到群晖 NAS 等 Linux 环境',
+            '📦 基于 php:8.2-apache 官方镜像，内置 SQLite3 + GD + mbstring，开箱即用',
+            '🔧 入口脚本自动处理目录权限，支持离线导出镜像包部署到内网环境',
+        ),
+    ),
+    array(
+        'version' => '2.5.1',
+        'date'    => '2026-07-03',
+        'changes' => array(
+            '🐛 修复部分中文文件名显示错误：safeBasename() 改用字符串切割替代 basename()，规避 GBK 编码第二字节 0x5C 被误判为路径分隔符',
+            '🐛 getFileInfo() 新增 displayName 参数，scanDirectory() 传入 UTF-8 文件名，避免从混合编码路径重新提取',
+            '🔄 CACHE_VERSION 递增至 5，旧缓存自动失效',
+        ),
+    ),
+    array(
+        'version' => '2.5.0',
+        'date'    => '2026-07-02',
+        'changes' => array(
+            '🖥️ SVG 图标按扩展名细分：7 套风格新增可执行文件、压缩包、字体、磁盘映像 4 种专属图标',
+            '📦 可执行文件 (exe/dll/msi/apk 等) 紫色系 | 压缩包 (zip/rar/7z/tar 等) 琥珀色系',
+            '🔤 字体文件 (ttf/otf/woff 等) 粉色系 | 磁盘映像 (iso/dmg/vhd 等) 灰蓝色系',
+        ),
+    ),
+    array(
+        'version' => '2.4.0',
+        'date'    => '2026-07-02',
+        'changes' => array(
+            '🎨 前台个性化 SVG 图标风格选择：访问者可在个性化面板中自主切换 7 种 SVG 风格，偏好保存至 localStorage，覆盖后台全局默认',
+        ),
+    ),
+    array(
+        'version' => '2.3.0',
+        'date'    => '2026-07-02',
+        'changes' => array(
+            '🎨 SVG 图标多风格支持：Material / 卡通 / 科幻 / 极简线条 / 像素 / 渐变 / 手绘，7 种视觉风格可在后台一键切换',
+            '🔧 Font Awesome 本地化：图标库置于 assets/fontawesome-free-6.4.0-web/，纯内网无需 CDN',
+            '🎯 后台 SVG 子风格菜单：选中 SVG 方案后自动展开风格选择器',
+        ),
+    ),
+    array(
+        'version' => '2.2.0',
+        'date'    => '2026-07-02',
+        'changes' => array(
+            '🎨 新增多套文件图标方案：后台「系统设置」新增「文件图标方案」选项，支持 Emoji / SVG / Font Awesome / CSS 四种方案自由切换',
+            '✨ SVG 内联图标：纯矢量，零外部依赖，所有平台显示完全一致',
+            '✨ Font Awesome 图标：专业图标库 CDN 按需加载，彩色区分文件类型',
+            '✨ CSS 纯样式图标：纯 CSS 绘制几何图形，零依赖，极致轻量',
+            '🔄 固定页眉页脚模式：wrapper 背景色统一使用主题 CSS 变量，彻底解决透明区域漏出滚动内容的问题',
+        ),
+    ),
+    array(
+        'version' => '2.1.0',
+        'date'    => '2026-07-02',
+        'changes' => array(
+            '🎨 新增个性化选项：布局宽度切换 — 标准（左右各 10%）/ 窄版（左右各 15%），设置保存在浏览器 localStorage',
+            '🧷 新增个性化选项：滚动模式切换 — 正常滚动 / 固定页眉页脚（仅文件列表区域滚动），长文件列表浏览更便捷',
+            '📂 前端资源拆分：CSS/JS 从 template.php 分离为 assets/style.css 和 assets/script.js，支持浏览器缓存，大幅减少 HTML 体积（template.php 从 1865 行精简至 133 行）',
+            '🎯 个性化弹窗优化：自动检测窗口边界重定位，小屏幕也不会超出可视区域',
+            '📝 新增文档：CHANGELOG.md 版本日志、GitHub更新指南.md 发布流程说明、.gitignore 敏感文件排除',
+        ),
+    ),
+    array(
         'version' => '2.0.8',
         'date'    => '2026-07-01',
         'changes' => array(

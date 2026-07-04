@@ -68,6 +68,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $config['max_upload_size'] = max(0, intval($_POST['max_upload_size']));
     }
 
+    // ── 图标方案 ──
+    if (isset($_POST['icon_scheme'])) {
+        $config['icon_scheme'] = in_array($_POST['icon_scheme'], ['emoji', 'svg', 'css']) ? $_POST['icon_scheme'] : 'emoji';
+    }
+
+    // ── SVG 图标子风格 ──
+    if (isset($_POST['svg_icon_style'])) {
+        $validStyles = ['material', 'cartoon', 'scifi', 'minimal', 'pixel', 'gradient', 'handdrawn'];
+        $config['svg_icon_style'] = in_array($_POST['svg_icon_style'], $validStyles) ? $_POST['svg_icon_style'] : 'material';
+    }
+
     // ── Office 预览设置 ──
     if (isset($_POST['office_preview_mode'])) {
         $config['office_preview_mode'] = in_array($_POST['office_preview_mode'], ['off', 'libreoffice', 'custom']) ? $_POST['office_preview_mode'] : 'off';
@@ -133,6 +144,26 @@ $config = loadConfig();
             <input type="number" id="max_upload_size" name="max_upload_size" value="<?php echo (int)($config['max_upload_size'] ?? 0); ?>" min="0" step="1" placeholder="0 表示不限制">
             <div style="font-size: 12px; color: #666; margin-top: 5px;">新建用户的默认上传大小限制，各用户可在「用户管理」中单独设置。</div>
         </div>
+        <div class="form-item">
+            <label for="icon_scheme">文件图标方案</label>
+            <select id="icon_scheme" name="icon_scheme" onchange="toggleSvgStyle()" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                <option value="emoji" <?php echo ($config['icon_scheme'] ?? 'emoji') === 'emoji' ? 'selected' : ''; ?>>😀 Emoji 表情 — 系统原生，色彩丰富，但不同 OS 显示不一致</option>
+                <option value="svg" <?php echo ($config['icon_scheme'] ?? '') === 'svg' ? 'selected' : ''; ?>>🖌️ SVG 内联 — 矢量图标，7 套风格，零外部依赖，所有平台完全一致</option>
+                <option value="css" <?php echo ($config['icon_scheme'] ?? '') === 'css' ? 'selected' : ''; ?>>🎨 CSS 纯样式 — 纯 CSS 绘制，零依赖，极致轻量</option>
+            </select>
+        </div>
+        <div class="form-item" id="svg_style_group" style="<?php echo ($config['icon_scheme'] ?? 'emoji') === 'svg' ? '' : 'display:none;'; ?>">
+            <label for="svg_icon_style">SVG 图标风格</label>
+            <select id="svg_icon_style" name="svg_icon_style" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                <option value="material" <?php echo ($config['svg_icon_style'] ?? 'material') === 'material' ? 'selected' : ''; ?>>🔷 Material — 现代简洁，扁平色彩，经典风格</option>
+                <option value="cartoon" <?php echo ($config['svg_icon_style'] ?? '') === 'cartoon' ? 'selected' : ''; ?>>🎈 卡通风格 — 圆润饱满，粗描边，活泼可爱</option>
+                <option value="scifi" <?php echo ($config['svg_icon_style'] ?? '') === 'scifi' ? 'selected' : ''; ?>>🚀 科幻风格 — 霓虹暗底，锐利棱角，未来科技感</option>
+                <option value="minimal" <?php echo ($config['svg_icon_style'] ?? '') === 'minimal' ? 'selected' : ''; ?>>◻️ 极简线条 — 细线勾勒，低饱和度，优雅克制</option>
+                <option value="pixel" <?php echo ($config['svg_icon_style'] ?? '') === 'pixel' ? 'selected' : ''; ?>>👾 像素风格 — 方块拼接，复古像素，怀旧游戏风</option>
+                <option value="gradient" <?php echo ($config['svg_icon_style'] ?? '') === 'gradient' ? 'selected' : ''; ?>>🌈 渐变风格 — 平滑过渡，现代渐变，应用质感</option>
+                <option value="handdrawn" <?php echo ($config['svg_icon_style'] ?? '') === 'handdrawn' ? 'selected' : ''; ?>>✏️ 手绘风格 — 不规则线条，草图质感，温暖自然</option>
+            </select>
+        </div>
         <button type="submit" class="btn-primary">保存设置</button>
     </form>
 
@@ -182,7 +213,12 @@ $config = loadConfig();
             document.getElementById('lo_path_group').style.display = mode === 'libreoffice' ? '' : 'none';
             document.getElementById('api_group').style.display = mode === 'custom' ? '' : 'none';
         }
+        function toggleSvgStyle() {
+            const scheme = document.getElementById('icon_scheme').value;
+            document.getElementById('svg_style_group').style.display = scheme === 'svg' ? '' : 'none';
+        }
         toggleOfficeFields();
+        toggleSvgStyle();
     </script>
 
     <h3 class="divider">导航链接管理</h3>

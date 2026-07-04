@@ -47,6 +47,12 @@ function loadConfig() {
         file_put_contents($jsonFile, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     }
 
+    // 向后兼容：Font Awesome 已移除，自动切换为 SVG
+    if (isset($config['icon_scheme']) && $config['icon_scheme'] === 'fontawesome') {
+        $config['icon_scheme'] = 'svg';
+        file_put_contents($jsonFile, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    }
+
     return $config;
 }
 
@@ -59,7 +65,7 @@ function getDefaultConfig() {
         'session_dir' => __DIR__ . DIRECTORY_SEPARATOR . 'session',
         'max_upload_size' => 0,
         'hidden_files' => array(),
-        'app_version' => '2.5.0',
+        'app_version' => '2.8.2',
         'icon_scheme' => 'emoji',
         'svg_icon_style' => 'material',
         'office_preview_mode' => 'off',
@@ -129,30 +135,31 @@ function initAppDB() {
     $isNew = !file_exists($dbFile);
     $db = new SQLite3($dbFile);
 
+    // ── 使用 IF NOT EXISTS 确保幂等，多次调用不报错 ──
+    $db->exec('CREATE TABLE IF NOT EXISTS downloads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        file_path TEXT NOT NULL,
+        file_name TEXT NOT NULL,
+        ip_address TEXT,
+        user_agent TEXT,
+        download_time DATETIME DEFAULT CURRENT_TIMESTAMP
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS roles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        permissions TEXT NOT NULL DEFAULT "{}"
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        password_hash TEXT NOT NULL,
+        role_id INTEGER NOT NULL DEFAULT 2,
+        max_upload_size INTEGER NOT NULL DEFAULT 0,
+        allowed_folders TEXT NOT NULL DEFAULT "[]",
+        username TEXT NOT NULL DEFAULT "",
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )');
+
     if ($isNew) {
-        // ── 创建所有表 ──
-        $db->exec('CREATE TABLE downloads (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            file_path TEXT NOT NULL,
-            file_name TEXT NOT NULL,
-            ip_address TEXT,
-            user_agent TEXT,
-            download_time DATETIME DEFAULT CURRENT_TIMESTAMP
-        )');
-        $db->exec('CREATE TABLE roles (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            permissions TEXT NOT NULL DEFAULT "{}"
-        )');
-        $db->exec('CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            password_hash TEXT NOT NULL,
-            role_id INTEGER NOT NULL DEFAULT 2,
-            max_upload_size INTEGER NOT NULL DEFAULT 0,
-            allowed_folders TEXT NOT NULL DEFAULT "[]",
-            username TEXT NOT NULL DEFAULT "",
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )');
 
         // 插入默认角色
         $allPerms = json_encode(array_fill_keys(array_keys(getDefaultPermissionSet()), true), JSON_UNESCAPED_UNICODE);
@@ -163,19 +170,22 @@ function initAppDB() {
         $limitedPerms['files_rename'] = true;
         $limitedPerms['downloads'] = true;
         $limitedPermsJson = json_encode($limitedPerms, JSON_UNESCAPED_UNICODE);
-        $db->exec("INSERT INTO roles (id, name, permissions) VALUES (1, '管理员', '$allPerms')");
-        $db->exec("INSERT INTO roles (id, name, permissions) VALUES (2, '操作员', '$limitedPermsJson')");
+        $db->exec("INSERT OR IGNORE INTO roles (id, name, permissions) VALUES (1, '管理员', '$allPerms')");
+        $db->exec("INSERT OR IGNORE INTO roles (id, name, permissions) VALUES (2, '操作员', '$limitedPermsJson')");
 
-        // 创建默认管理员
-        $adminPwd = getConfig('admin_password');
-        if (empty($adminPwd)) {
-            $adminPwd = 'admin123';
+        // 创建默认管理员（仅当不存在时）
+        $existingAdmin = $db->querySingle('SELECT COUNT(*) FROM users WHERE id = 1');
+        if ($existingAdmin == 0) {
+            $adminPwd = getConfig('admin_password');
+            if (empty($adminPwd)) {
+                $adminPwd = 'admin123';
+            }
+            $hash = password_hash($adminPwd, PASSWORD_DEFAULT);
+            $stmt = $db->prepare('INSERT INTO users (id, password_hash, role_id, username) VALUES (1, :hash, 1, :uname)');
+            $stmt->bindValue(':hash', $hash, SQLITE3_TEXT);
+            $stmt->bindValue(':uname', '管理员', SQLITE3_TEXT);
+            $stmt->execute();
         }
-        $hash = password_hash($adminPwd, PASSWORD_DEFAULT);
-        $stmt = $db->prepare('INSERT INTO users (password_hash, role_id, username) VALUES (:hash, 1, :uname)');
-        $stmt->bindValue(':hash', $hash, SQLITE3_TEXT);
-        $stmt->bindValue(':uname', '管理员', SQLITE3_TEXT);
-        $stmt->execute();
 
         // ── 从旧数据库迁移数据 ──
         $oldUsersDb = __DIR__ . DIRECTORY_SEPARATOR . 'users.db';
@@ -601,6 +611,60 @@ function scanDirectoryCached($relativePath) {
     rename($tmpFile, $cacheFile);
     
     return $files;
+}
+
+// ──────────────────────────────────────────────
+// 递归搜索：遍历所有子目录，匹配文件名
+// ──────────────────────────────────────────────
+function recursiveSearch($keyword) {
+    $results = array();
+    _recursiveSearchWalk('', mb_strtolower(trim($keyword)), $results);
+
+    // 目录优先 + 字母排序
+    usort($results, function($a, $b) {
+        if ($a['type'] !== $b['type']) {
+            return $a['type'] === 'dir' ? -1 : 1;
+        }
+        return strcmp(strtolower($a['path']), strtolower($b['path']));
+    });
+
+    return $results;
+}
+
+function _recursiveSearchWalk($relativePath, $keywordLower, &$results) {
+    $fullPath = getFullPath($relativePath);
+
+    if (!isSafePath($fullPath) || !is_dir($fullPath)) {
+        return;
+    }
+
+    $dh = opendir($fullPath);
+    if (!$dh) return;
+
+    while (($file = readdir($dh)) !== false) {
+        if ($file === '.' || $file === '..') continue;
+
+        $fileNameUtf8 = sysToUtf8($file);
+        $filePath = $fullPath . DIRECTORY_SEPARATOR . $file;
+        $fileRelativePath = empty($relativePath) ? $fileNameUtf8 : $relativePath . '/' . $fileNameUtf8;
+
+        if (is_link($filePath)) continue;
+        if (isHiddenFile($fileNameUtf8, $fileRelativePath)) continue;
+
+        $fileInfo = getFileInfo($filePath, $fileRelativePath, $fileNameUtf8);
+
+        // 匹配关键词（不区分大小写）
+        if (mb_stripos($fileNameUtf8, $keywordLower) !== false) {
+            $results[] = $fileInfo;
+        }
+
+        // 递归进入子目录
+        if ($fileInfo['type'] === 'dir') {
+            _recursiveSearchWalk($fileRelativePath, $keywordLower, $results);
+        }
+    }
+
+    closedir($dh);
 }
 
 // 清除某目录的缓存（文件增删/重命名后调用）

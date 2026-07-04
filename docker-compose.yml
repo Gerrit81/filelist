@@ -1,0 +1,21 @@
+services:
+  filelist:
+    build: .
+    container_name: filelist
+    ports:
+      - "8080:80"
+    volumes:
+      # 被浏览的文件目录 —— 指向宿主机上你的实际文件路径
+      - ./data:/var/www/html/data
+      # 以下用命名卷持久化（容器删除重建后数据不丢）
+      - filelist-thumbs:/var/www/html/thumbs
+      - filelist-cache:/var/www/html/cache
+      - filelist-session:/var/www/html/session
+      - filelist-appdata:/var/www/html/appdata
+    restart: unless-stopped
+
+volumes:
+  filelist-thumbs:
+  filelist-cache:
+  filelist-session:
+  filelist-appdata:

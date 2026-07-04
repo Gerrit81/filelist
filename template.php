@@ -6,9 +6,6 @@
     <title>文件浏览器</title>
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="assets/style.css?v=<?php echo htmlspecialchars(getConfig('app_version')); ?>">
-    <?php if ((getConfig('icon_scheme') ?: 'emoji') === 'fontawesome'): ?>
-    <link rel="stylesheet" href="assets/fontawesome-free-6.4.0-web/css/all.min.css">
-    <?php endif; ?>
 </head>
 <body data-current-path="<?php echo htmlspecialchars($currentPath); ?>" data-office-preview-mode="<?php echo htmlspecialchars($officePreviewMode ?? 'off'); ?>" data-icon-scheme="<?php echo htmlspecialchars(getConfig('icon_scheme') ?: 'emoji'); ?>" data-svg-icon-style="<?php echo htmlspecialchars(getConfig('svg_icon_style') ?: 'material'); ?>">
 
