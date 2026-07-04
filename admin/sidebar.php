@@ -27,6 +27,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <?php endif; ?>
             <?php if (hasPermission('settings')): ?>
             <li><a href="settings.php" <?php echo $currentPage === 'settings.php' ? 'class="active"' : ''; ?>>系统设置</a></li>
+            <li><a href="security.php" <?php echo $currentPage === 'security.php' ? 'class="active"' : ''; ?>>安全审计</a></li>
             <?php endif; ?>
             <li><a href="changelog.php" <?php echo $currentPage === 'changelog.php' ? 'class="active"' : ''; ?>>更新日志</a></li>
             <li><a href="login.php?action=logout">退出登录</a></li>

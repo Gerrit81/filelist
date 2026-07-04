@@ -1,5 +1,6 @@
 <?php
 require_once 'functions.php';
+require_once 'security.php';
 
 initDirectories();
 
@@ -8,6 +9,9 @@ session_save_path($sessionDir);
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Lax');
 session_start();
+
+// 安全启动（外网模式启用全套安全防护）
+securityBootstrap(false);
 
 function serveFile($filePath, $download = false) {
     if (!isSafePath($filePath)) {
@@ -223,6 +227,14 @@ switch ($action) {
         exit;
     
     case 'download':
+        // 外网模式：下载速率限制
+        $rateLimitError = checkDownloadRateLimit();
+        if ($rateLimitError !== null) {
+            http_response_code(429);
+            header('Retry-After: 60');
+            echo $rateLimitError;
+            exit;
+        }
         serveFile(getFullPath($path), true);
         exit;
     

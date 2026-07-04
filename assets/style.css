@@ -211,6 +211,47 @@ header p {
 .file-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;
+}
+
+/* 固定列宽：名称列自适应，其余列固定，防止超长文件名把右侧挤出去 */
+.file-table th:nth-child(1),
+.file-table td:nth-child(1) {
+    width: auto;
+    min-width: 0;
+}
+
+.file-table th:nth-child(2),
+.file-table td:nth-child(2) {
+    width: 130px;
+}
+
+.file-table th:nth-child(3),
+.file-table td:nth-child(3) {
+    width: 175px;
+}
+
+.file-table th:nth-child(4),
+.file-table td:nth-child(4) {
+    width: 185px;
+}
+
+.file-table th:nth-child(5),
+.file-table td:nth-child(5) {
+    width: 220px;
+}
+
+.file-table th:nth-child(2),
+.file-table th:nth-child(3),
+.file-table th:nth-child(4),
+.file-table th:nth-child(5),
+.file-table td:nth-child(2),
+.file-table td:nth-child(3),
+.file-table td:nth-child(4),
+.file-table td:nth-child(5) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .file-table thead {
@@ -287,7 +328,8 @@ header p {
     display: flex;
     align-items: center;
     gap: 12px;
-    min-width: 350px;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .file-icon {
@@ -309,6 +351,8 @@ header p {
 }
 
 .file-name {
+    display: flex;
+    min-width: 0;
     cursor: pointer;
     color: var(--text-primary);
     font-weight: 500;
@@ -316,7 +360,21 @@ header p {
     transition: all 0.2s;
     padding: 4px 8px;
     border-radius: 4px;
-    display: inline-block;
+    gap: 0;
+}
+
+/* 文件基础名：可截断 + 省略号 */
+.file-name-base {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* 文件扩展名：始终完整显示 */
+.file-name-ext {
+    flex-shrink: 0;
+    white-space: nowrap;
 }
 
 .file-name:hover {
@@ -335,6 +393,7 @@ header p {
 
 /* 搜索结果的子目录路径前缀 */
 .search-path-prefix {
+    flex-shrink: 0;
     color: #888;
     font-weight: 400;
     font-size: 12px;
@@ -348,38 +407,37 @@ body[data-theme="dark"] .search-path-prefix {
 .file-size {
     white-space: nowrap;
     color: var(--text-secondary);
-    width: 130px;
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    font-variant-numeric: tabular-nums;  /* 数字等宽，不影响其他字符 */
 }
 
 .file-type {
     white-space: nowrap;
     color: var(--text-secondary);
-    width: 160px;
 }
 
 .file-mtime {
     white-space: nowrap;
     color: var(--text-secondary);
-    width: 170px;
-    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    font-variant-numeric: tabular-nums;  /* 数字等宽，不影响其他字符 */
 }
 
 .file-actions {
     white-space: nowrap;
-    width: 180px;
 }
 
 .action-btn {
-    padding: 6px 14px;
+    padding: 6px 12px;
     border: none;
     border-radius: 8px;
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    margin-right: 6px;
+    margin-right: 4px;
     transition: all 0.2s;
     letter-spacing: 0.3px;
+}
+.action-btn:last-child {
+    margin-right: 0;
 }
 
 .action-btn-preview {
@@ -1065,7 +1123,7 @@ footer p:first-child {
     }
 
     .file-name-cell {
-        min-width: 200px;
+        min-width: 0;
     }
 
     .action-btn {

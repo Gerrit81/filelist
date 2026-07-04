@@ -325,7 +325,37 @@
                     fileName.appendChild(dirPrefix);
                 }
             }
-            fileName.appendChild(document.createTextNode(file.name));
+
+            // 拆分基础名和扩展名：省略号后保留扩展名
+            if (file.type !== 'dir') {
+                const lastDot = file.name.lastIndexOf('.');
+                if (lastDot > 0) {
+                    const nameBase = document.createElement('span');
+                    nameBase.className = 'file-name-base';
+                    nameBase.textContent = file.name.substring(0, lastDot);
+                    fileName.appendChild(nameBase);
+                    const nameExt = document.createElement('span');
+                    nameExt.className = 'file-name-ext';
+                    nameExt.textContent = file.name.substring(lastDot);
+                    fileName.appendChild(nameExt);
+                } else {
+                    const nameBase = document.createElement('span');
+                    nameBase.className = 'file-name-base';
+                    nameBase.textContent = file.name;
+                    fileName.appendChild(nameBase);
+                }
+            } else {
+                // 文件夹也支持省略号截断
+                const nameBase = document.createElement('span');
+                nameBase.className = 'file-name-base';
+                nameBase.textContent = file.name;
+                fileName.appendChild(nameBase);
+            }
+
+            // 超长文件名时，鼠标悬停显示完整路径
+            fileName.title = isSearchMode ? file.path : file.name;
+
+            fileName.title = isSearchMode ? file.path : file.name;
 
             if (isImage(file)) {
                 fileName.dataset.imagePath = encodeURIComponent(file.path);

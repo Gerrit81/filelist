@@ -1,8 +1,12 @@
 <?php
 require_once __DIR__ . '/../functions.php';
+require_once __DIR__ . '/../security.php';
 
 initDirectories();
 initAppDB();
+
+// 安全启动（外网模式启用全套安全防护）
+securityBootstrap(true);
 
 $sessionDir = getConfig('session_dir');
 session_save_path($sessionDir);

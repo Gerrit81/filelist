@@ -1,5 +1,36 @@
 # 更新日志 (CHANGELOG)
 
+## v2.9.1 (2026-07-05)
+
+### 修复
+- 🐛 修复跨平台路径问题：Windows 绝对路径（如 `D:\phpStudy_Pro\WWW\filelist\thumbs`）部署到 Linux 后会被当成目录名创建，现在 `loadConfig()` / `saveConfig()` 会自动归一化为程序根目录下的相对路径
+- 🐛 修复后台设置数据目录时，Windows 绝对路径被直接写入 `config.json` 的问题
+- 🐛 修复长文件名导致表格右侧列（大小、修改日期、操作）被挤出视口的问题，添加固定列宽和省略号显示
+
+---
+
+## v2.9.0 (2026-07-04)
+
+### 新增
+- 🔐 **内外网双模式安全框架**：新增 `security.php` 安全中间件模块，通过 `security_mode` 配置一键切换内网/外网安全策略
+- 🔐 **登录安全增强**（外网模式）：速率限制（5次/分）、连续失败锁定（5次→15分钟）、攻击者延迟响应
+- 🌐 **IP 黑白名单**：支持按 IP 放行或拦截，白名单优先，管理后台可视化配置
+- 📝 **审计日志系统**：记录登录/登出/上传/下载/IP规则变更，安全审计页面可查看和清理
+- 📊 **安全审计管理页面**：`admin/security.php` — 登录记录、审计日志、IP规则、速率限制统一面板
+- 🔒 **安全响应头**（.htaccess）：CSP + X-Frame-Options + X-Content-Type-Options + Referrer-Policy + XSS-Protection
+- 📥 **下载速率限制**：外网模式可配每分钟下载次数上限，防止恶意刷流量
+- 📤 **上传安全增强**：外网模式禁止危险扩展名（`.php`, `.exe` 等）、双扩展名伪装检测、可配大小上限
+
+### 变更
+- ⚙️ `config.php` 新增 8 个安全配置项：`security_mode`, `download_rate_limit`, `login_max_failures`, `login_lock_minutes`, `login_rate_per_minute`, `upload_max_size_mb`, `internet_allow_anonymous_view`, `internet_force_https`
+- ⚙️ 管理后台「系统设置」新增「安全模式与防护」设置区块，支持可视化配置所有安全参数
+- 🧭 管理后台侧边栏新增「安全审计」入口
+
+### 修复
+- 🔧 **SQL 注入修复**：`deleteRole()` 和 `deleteUser()` 改用参数化查询，消除 SQL 拼接注入风险
+
+---
+
 ## v2.8.2 (2026-07-04)
 
 ### 修复

@@ -1,0 +1,35 @@
+{
+    "site_name": "文件浏览器",
+    "site_subtitle": "轻量级文件目录浏览系统",
+    "data_dir": "D:\\浮生若梦\\Downloads",
+    "thumb_dir": "D:\\phpStudy_Pro\\WWW\\filelist\\thumbs",
+    "session_dir": "D:\\phpStudy_Pro\\WWW\\filelist\\session",
+    "max_upload_size": 0,
+    "hidden_files": [],
+    "app_version": "2.9.1",
+    "icon_scheme": "svg",
+    "svg_icon_style": "cartoon",
+    "office_preview_mode": "off",
+    "libreoffice_path": "",
+    "office_preview_api": "",
+    "nav_links": [
+        {
+            "name": "首页",
+            "url": ".",
+            "target": "_self"
+        },
+        {
+            "name": "管理后台",
+            "url": "admin\/",
+            "target": "_self"
+        }
+    ],
+    "security_mode": "intranet",
+    "download_rate_limit": 30,
+    "login_max_failures": 5,
+    "login_lock_minutes": 15,
+    "login_rate_per_minute": 5,
+    "upload_max_size_mb": 100,
+    "internet_allow_anonymous_view": true,
+    "internet_force_https": true
+}

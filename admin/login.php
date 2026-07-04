@@ -1,7 +1,11 @@
 <?php
 require_once __DIR__ . '/init.php';
 
+// 如果取消防 CSRF 的外网攻击（提前检查）
+$lockError = preLoginCheck();
+
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
+    auditLog('logout', '用户主动登出');
     $_SESSION = array();
     if (isset($_COOKIE[session_name()])) {
         setcookie(session_name(), '', time() - 42000, '/');
@@ -20,22 +24,44 @@ $error = '';
 if (isset($_GET['error']) && $_GET['error'] === 'no_permission') {
     $error = '您没有访问该页面的权限，请重新登录。';
 }
+if (isset($_GET['error']) && $_GET['error'] === 'timeout') {
+    $error = '会话已超时，请重新登录。';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $password = $_POST['password'] ?? '';
-    $user = getUserByPassword($password);
-    if ($user) {
-        session_regenerate_id(true);  // 防会话固定攻击
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['role_id'] = $user['role_id'];
-        $_SESSION['role_name'] = $user['role_name'] ?? '未知';
-        $_SESSION['max_upload_size'] = (int)$user['max_upload_size'];
-        $_SESSION['allowed_folders'] = $user['allowed_folders'];
-        $_SESSION['user_permissions'] = $user['role_permissions'];
-        $_SESSION['username'] = $user['username'] ?: ('用户#' . $user['id']);
-        header('Location: index.php');
-        exit;
+    // 外网模式：登录前置检查
+    $preError = preLoginCheck();
+    if ($preError) {
+        $error = $preError;
     } else {
-        $error = '密码错误';
+        $password = $_POST['password'] ?? '';
+        $user = getUserByPassword($password);
+        if ($user) {
+            logLoginAttempt(true);
+            session_regenerate_id(true);  // 防会话固定攻击
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['role_id'] = $user['role_id'];
+            $_SESSION['role_name'] = $user['role_name'] ?? '未知';
+            $_SESSION['max_upload_size'] = (int)$user['max_upload_size'];
+            $_SESSION['allowed_folders'] = $user['allowed_folders'];
+            $_SESSION['user_permissions'] = $user['role_permissions'];
+            $_SESSION['username'] = $user['username'] ?: ('用户#' . $user['id']);
+
+            auditLog('login', '登录成功 [' . ($_SESSION['username'] ?? '') . ']', $user['id']);
+
+            header('Location: index.php');
+            exit;
+        } else {
+            logLoginAttempt(false);
+            auditLog('login_failed', '密码错误');
+
+            // 检查是否即将被锁定，给出提示
+            if (isInternetMode() && isLoginLocked(5, 15)) {
+                $error = '连续登录失败次数过多，账户已临时锁定，请 15 分钟后再试。';
+            } else {
+                $error = '密码错误';
+            }
+        }
     }
 }
 ?>

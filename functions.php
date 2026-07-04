@@ -47,12 +47,41 @@ function loadConfig() {
         file_put_contents($jsonFile, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
     }
 
-    // 向后兼容：Font Awesome 已移除，自动切换为 SVG
-    if (isset($config['icon_scheme']) && $config['icon_scheme'] === 'fontawesome') {
-        $config['icon_scheme'] = 'svg';
-        file_put_contents($jsonFile, json_encode($config, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT));
+    // 向后兼容：跨平台路径归一化，避免 Windows 绝对路径在 Linux 上被当成目录名创建
+    $config = normalizeConfigPaths($config);
+
+    return $config;
+}
+
+function normalizeConfigPath($path) {
+    if (empty($path) || !is_string($path)) {
+        return $path;
     }
 
+    // 仅在非 Windows 平台（Linux/macOS）上转换 Windows 绝对路径
+    // Windows 绝对路径（如 D:\data）在 Windows 上完全有效，不应被修改
+    if (DIRECTORY_SEPARATOR === '/') {
+        // 统一为 / 再检测 [盘符]: 模式
+        $normalized = str_replace('\\', '/', $path);
+        if (preg_match('#^[a-zA-Z]:/#', $normalized)) {
+            $baseName = basename(rtrim($normalized, '/'));
+            return __DIR__ . DIRECTORY_SEPARATOR . $baseName;
+        }
+    }
+
+    return $path;
+}
+
+function normalizeConfigPaths($config) {
+    if (!is_array($config)) {
+        return $config;
+    }
+    $pathKeys = array('data_dir', 'thumb_dir', 'session_dir');
+    foreach ($pathKeys as $key) {
+        if (isset($config[$key])) {
+            $config[$key] = normalizeConfigPath($config[$key]);
+        }
+    }
     return $config;
 }
 
@@ -65,7 +94,7 @@ function getDefaultConfig() {
         'session_dir' => __DIR__ . DIRECTORY_SEPARATOR . 'session',
         'max_upload_size' => 0,
         'hidden_files' => array(),
-        'app_version' => '2.8.2',
+        'app_version' => '2.9.1',
         'icon_scheme' => 'emoji',
         'svg_icon_style' => 'material',
         'office_preview_mode' => 'off',
@@ -75,6 +104,15 @@ function getDefaultConfig() {
             array('name' => '首页', 'url' => '.', 'target' => '_self'),
             array('name' => '管理后台', 'url' => 'admin/', 'target' => '_self'),
         ),
+        // 安全模式配置
+        'security_mode' => 'intranet',
+        'download_rate_limit' => 30,
+        'login_max_failures' => 5,
+        'login_lock_minutes' => 15,
+        'login_rate_per_minute' => 5,
+        'upload_max_size_mb' => 100,
+        'internet_allow_anonymous_view' => true,
+        'internet_force_https' => true,
     );
 }
 
@@ -89,6 +127,9 @@ function getConfig($key) {
 function saveConfig($config) {
     // admin_password 已迁移到 SQLite users 表，不再写入 config.php 明文
     unset($config['admin_password']);
+
+    // 保存前对目录路径做跨平台归一化，避免 Windows 绝对路径被写入配置
+    $config = normalizeConfigPaths($config);
 
     // 如果 data_dir 变更，清除所有目录缓存和统计缓存
     $oldDataDir = getConfig('data_dir');
@@ -134,6 +175,37 @@ function initAppDB() {
     $dbFile = getAppDbPath();
     $isNew = !file_exists($dbFile);
     $db = new SQLite3($dbFile);
+
+    // 初始化安全相关表（幂等）
+    $db->exec('CREATE TABLE IF NOT EXISTS login_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip_address TEXT NOT NULL,
+        attempted_at INTEGER NOT NULL,
+        success INTEGER NOT NULL DEFAULT 0
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, attempted_at)');
+    $db->exec('CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type TEXT NOT NULL,
+        event_detail TEXT,
+        ip_address TEXT,
+        user_id INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS ip_rules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip_address TEXT NOT NULL,
+        rule_type TEXT NOT NULL,
+        note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )');
+    $db->exec('CREATE TABLE IF NOT EXISTS rate_limits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        identifier TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        hit_at INTEGER NOT NULL
+    )');
+    $db->exec('CREATE INDEX IF NOT EXISTS idx_rate_limits_cleanup ON rate_limits(identifier, resource, hit_at)');
 
     // ── 使用 IF NOT EXISTS 确保幂等，多次调用不报错 ──
     $db->exec('CREATE TABLE IF NOT EXISTS downloads (
@@ -998,7 +1070,9 @@ function deleteRole($id) {
     initUserDB();
     $db = new SQLite3(getUserDbPath());
     // 不允许删除被用户引用的角色
-    $count = $db->querySingle('SELECT COUNT(*) FROM users WHERE role_id = ' . (int)$id);
+    $stmt = $db->prepare('SELECT COUNT(*) FROM users WHERE role_id = :id');
+    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $count = $stmt->execute()->fetchArray(SQLITE3_NUM)[0];
     if ($count > 0) {
         $db->close();
         return '该角色下还有用户，请先迁移用户到其他角色';
@@ -1129,7 +1203,9 @@ function deleteUser($id) {
         return '不能删除自己';
     }
     // 检查是否至少还有一个有 users+roles 权限的用户
-    $remaining = $db->querySingle("SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id != " . (int)$id . " AND (r.permissions LIKE '%\"users\":true%' OR r.permissions LIKE '%\"roles\":true%')");
+    $stmt = $db->prepare("SELECT COUNT(*) FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id != :id AND (r.permissions LIKE '%\"users\":true%' OR r.permissions LIKE '%\"roles\":true%')");
+    $stmt->bindValue(':id', $id, SQLITE3_INTEGER);
+    $remaining = $stmt->execute()->fetchArray(SQLITE3_NUM)[0];
     if ($remaining < 1) {
         $db->close();
         return '至少保留一个有用户管理或角色管理权限的账户';

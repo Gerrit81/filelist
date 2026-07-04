@@ -56,12 +56,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $config['site_subtitle'] = trim($_POST['site_subtitle']);
     }
     if (isset($_POST['data_dir'])) {
-        $newDataDir = trim($_POST['data_dir']);
-        if (file_exists($newDataDir) && is_dir($newDataDir)) {
-            $config['data_dir'] = $newDataDir;
-        } else {
-            $message = '数据目录不存在或不是有效的目录';
+        $newDataDir = rtrim(trim($_POST['data_dir']), '/\\');
+        // 清除文件状态缓存，确保 Linux 下实时检测
+        clearstatcache(true);
+
+        $exists = file_exists($newDataDir) || (function_exists('is_dir') && @is_dir($newDataDir));
+
+        if (!$exists) {
+            // 诊断：尝试 realpath 看是否由 open_basedir 导致
+            $rp = @realpath($newDataDir);
+            if ($rp !== false && is_dir($rp)) {
+                // open_basedir 下 file_exists 可能失败，但 realpath 成功 → 信任 realpath
+                $config['data_dir'] = normalizeConfigPath($newDataDir);
+            } else {
+                $basedir = ini_get('open_basedir');
+                $detail = '目录不存在或无法读取。';
+                if (!empty($basedir)) {
+                    $detail .= ' 当前 PHP open_basedir 限制为：' . $basedir . '，请确认目标目录在该范围内。';
+                }
+                $message = '数据目录无效：' . $detail;
+                $messageType = 'error';
+            }
+        } elseif (!is_dir($newDataDir)) {
+            $message = '数据目录无效：该路径存在但不是目录（可能是文件）';
             $messageType = 'error';
+        } else {
+            // 最终安全检查：确保 realpath 能解析（路径遍历防护前置）
+            $realPath = @realpath($newDataDir);
+            if ($realPath === false || !is_dir($realPath)) {
+                $message = '数据目录无效：无法解析为真实路径（可能存在符号链接或权限问题）';
+                $messageType = 'error';
+            } else {
+                $config['data_dir'] = normalizeConfigPath($newDataDir);
+            }
         }
     }
     if (isset($_POST['max_upload_size'])) {
@@ -88,6 +115,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (isset($_POST['office_preview_api'])) {
         $config['office_preview_api'] = trim($_POST['office_preview_api']);
+    }
+
+    // ── 安全模式设置 ──
+    if (isset($_POST['security_mode'])) {
+        $config['security_mode'] = in_array($_POST['security_mode'], ['intranet', 'internet']) ? $_POST['security_mode'] : 'intranet';
+    }
+    if (isset($_POST['download_rate_limit'])) {
+        $config['download_rate_limit'] = max(0, intval($_POST['download_rate_limit']));
+    }
+    if (isset($_POST['upload_max_size_mb'])) {
+        $config['upload_max_size_mb'] = max(0, intval($_POST['upload_max_size_mb']));
+    }
+    if (isset($_POST['internet_allow_anonymous_view'])) {
+        $config['internet_allow_anonymous_view'] = ($_POST['internet_allow_anonymous_view'] === '1');
+    }
+    if (isset($_POST['internet_force_https'])) {
+        $config['internet_force_https'] = ($_POST['internet_force_https'] === '1');
     }
 
     // ── 添加链接 ──
@@ -220,6 +264,60 @@ $config = loadConfig();
         toggleOfficeFields();
         toggleSvgStyle();
     </script>
+
+    <h3 class="divider">🔐 安全模式与防护</h3>
+    <div style="background: <?php echo ($config['security_mode'] ?? 'intranet') === 'internet' ? '#fff3cd' : '#f0fff4'; ?>; border: 1px solid <?php echo ($config['security_mode'] ?? 'intranet') === 'internet' ? '#ffc107' : '#b7ebbf'; ?>; border-radius: 10px; padding: 16px; margin-bottom: 20px; font-size: 13px; color: #445;">
+        <p style="margin: 0 0 8px 0; font-weight: 600;">
+            <?php echo ($config['security_mode'] ?? 'intranet') === 'internet' ? '⚠️ 当前为外网模式（高安全性）' : '✅ 当前为内网模式（轻便快捷）'; ?>
+        </p>
+        <p style="margin: 0;">
+            <?php if (($config['security_mode'] ?? 'intranet') === 'internet'): ?>
+            外网模式下启用了：登录限流+锁定、安全响应头、IP 黑白名单、审计日志、文件上传格式校验、下载速率限制、Session 超时等全部防护措施。
+            <?php else: ?>
+            内网模式下仅保留基础安全（密码认证+CSRF+路径防护），保持轻量便捷。切换到外网部署时请改为「外网模式」。
+            <?php endif; ?>
+        </p>
+    </div>
+
+    <form method="post" style="margin-bottom: 20px;">
+        <div class="form-item">
+            <label for="security_mode">安全模式</label>
+            <select id="security_mode" name="security_mode" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+                <option value="intranet" <?php echo ($config['security_mode'] ?? 'intranet') === 'intranet' ? 'selected' : ''; ?>>🏠 内网模式 — 轻便快捷，仅基础安全（默认）</option>
+                <option value="internet" <?php echo ($config['security_mode'] ?? '') === 'internet' ? 'selected' : ''; ?>>🌐 外网模式 — 全面防护，零信任安全策略</option>
+            </select>
+            <div style="font-size:12px;color:#888;margin-top:4px;">⚠️ 切换模式后立即生效。外网模式会限制频繁操作，请确保已在 IP 白名单中添加管理员 IP。</div>
+        </div>
+
+        <div class="form-item">
+            <label for="download_rate_limit">下载速率限制（次/分钟，外网模式，0=不限）</label>
+            <input type="number" id="download_rate_limit" name="download_rate_limit" value="<?php echo (int)($config['download_rate_limit'] ?? 30); ?>" min="0" step="1" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+            <div style="font-size:12px;color:#888;margin-top:4px;">防止外网用户恶意刷下载，建议值：30 次/分钟。</div>
+        </div>
+
+        <div class="form-item">
+            <label for="upload_max_size_mb">上传文件大小限制（MB，外网模式，0=不限）</label>
+            <input type="number" id="upload_max_size_mb" name="upload_max_size_mb" value="<?php echo (int)($config['upload_max_size_mb'] ?? 100); ?>" min="0" step="1" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:8px;font-size:14px;">
+            <div style="font-size:12px;color:#888;margin-top:4px;">建议值：100 MB，过大文件可能消耗服务器带宽。</div>
+        </div>
+
+        <div class="form-item">
+            <label>
+                <input type="checkbox" name="internet_allow_anonymous_view" value="1" <?php echo ($config['internet_allow_anonymous_view'] ?? true) ? 'checked' : ''; ?> style="margin-right:6px;">
+                外网模式允许匿名浏览文件列表（无需登录即可查看）
+            </label>
+            <div style="font-size:12px;color:#888;margin-top:4px;">关闭后，外网用户必须登录才能访问任何文件。</div>
+        </div>
+
+        <div class="form-item">
+            <label>
+                <input type="checkbox" name="internet_force_https" value="1" <?php echo ($config['internet_force_https'] ?? true) ? 'checked' : ''; ?> style="margin-right:6px;">
+                强制 HTTPS（部署在反向代理后面时应关闭）
+            </label>
+        </div>
+
+        <button type="submit" class="btn-primary">保存设置</button>
+    </form>
 
     <h3 class="divider">导航链接管理</h3>
 

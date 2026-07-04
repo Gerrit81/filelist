@@ -96,6 +96,22 @@ if ($isAjax && $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['files'])
         $fileSize = $_FILES['files']['size'][$key];
 
         if ($fileError === UPLOAD_ERR_OK) {
+            // 外网模式：文件类型安全检查
+            if (isInternetMode()) {
+                $nameCheck = validateUploadFilename($fileName);
+                if (!$nameCheck[0]) {
+                    $results[] = array('name' => $fileName, 'size' => $fileSize, 'status' => 'failed', 'reason' => $nameCheck[1]);
+                    $failCount++;
+                    continue;
+                }
+                // 外网模式：文件大小限制
+                $maxMb = (int)(getConfig('upload_max_size_mb') ?? 100);
+                if ($maxMb > 0 && $fileSize > $maxMb * 1048576) {
+                    $results[] = array('name' => $fileName, 'size' => $fileSize, 'status' => 'failed', 'reason' => '超过外网上传限制（' . $maxMb . ' MB）');
+                    $failCount++;
+                    continue;
+                }
+            }
             // 检查用户上传大小限制
             $userLimit = currentUserMaxUpload();
             if ($userLimit > 0 && $fileSize > $userLimit) {
@@ -142,6 +158,10 @@ if ($isAjax && $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_FILES['files'])
             $results[] = array('name' => $fileName, 'size' => $fileSize, 'status' => 'failed', 'reason' => $errorMsg);
             $failCount++;
         }
+    }
+
+    if ($successCount > 0) {
+        auditLog('upload', "上传 {$successCount} 个文件到目录: " . ($subDir ?: '/'));
     }
 
     echo json_encode(array(
