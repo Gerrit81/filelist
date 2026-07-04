@@ -8,6 +8,10 @@
 - 🐛 修复前台各列字体不一致问题：大小/修改时间列取消等宽字体，统一使用系统字体，数字用 `tabular-nums` 保持对齐
 - 🐛 修复后台文件管理表格长文件名导致的布局错位：添加 `table-layout: fixed` + 省略号截断，右侧列宽优化（大小 110px / 修改时间 170px / 操作 195px）
 
+### 安全
+- 🔒 修复 Nginx 下 `.db` 数据库文件可被直接下载的安全漏洞：`security.php` 新增 `blockSensitiveFiles()` PHP 层拦截 + README 补充 Nginx deny 配置说明
+- 🔒 新增 `.gitignore`，防止 `config.json`、`*.db` 等运行期文件混入版本控制导致跨环境数据泄露
+
 ---
 
 ## v2.9.1 (2026-07-05)

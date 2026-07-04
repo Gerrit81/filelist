@@ -179,7 +179,21 @@ filelist/
 ## 🔒 安全建议
 
 1. **修改默认密码**：首次登录后台后立即修改管理员密码（用户管理 → 编辑管理员）
-2. **保护配置文件**：确保 `.htaccess` 或 `web.config` 生效，阻止 `.db` / `.json` 文件直接访问
+2. **保护敏感文件**：务必配置 Web 服务器阻止 `.db` / `.json` 等文件直接访问
+   - **Apache**：确保 `AllowOverride All` 已启用，项目自带 `.htaccess` 自动生效
+   - **Nginx**：在 `server` 块中添加以下规则（**必须手动配置，Nginx 不读取 .htaccess**）：
+     ```nginx
+     # 阻止访问 .db / .json / .htaccess 等敏感文件
+     location ~* \.(db|sqlite|sqlite3)$ {
+         deny all;
+         return 403;
+     }
+     location ~* /(config\.json|config\.php|\.htaccess|web\.config)$ {
+         deny all;
+         return 403;
+     }
+     ```
+   - 代码层面也已内置 PHP 拦截兜底（`security.php`）
 3. **HTTPS**：生产环境务必使用 HTTPS
 4. **PHP 配置**：建议在 `php.ini` 中设置 `expose_php = Off`
 5. **文件上传限制**：在 `php.ini` 中合理配置 `upload_max_filesize` 和 `post_max_size`

@@ -401,10 +401,46 @@ function checkDownloadRateLimit() {
 // ──────────────────────────────────────────────
 
 /**
+ * 拦截对敏感文件的直接访问
+ * 注意：此防护仅在请求经过 PHP 时生效。
+ * Nginx 用户必须额外在 server 块中配置 deny 规则（见 README）。
+ */
+function blockSensitiveFiles() {
+    $uri = $_SERVER['REQUEST_URI'] ?? '';
+    $uri = parse_url($uri, PHP_URL_PATH); // 去掉 query string
+    $uri = rtrim($uri, '/');
+    $basename = basename($uri);
+
+    // 拦截 .db 数据库文件
+    if (preg_match('/\.db$/i', $basename)) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        die('403 Forbidden — 数据库文件禁止直接访问');
+    }
+
+    // 拦截配置文件
+    if (in_array($basename, array('config.json', 'config.php', '.htaccess', 'web.config'))) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        die('403 Forbidden — 配置文件禁止直接访问');
+    }
+
+    // 拦截核心 PHP 文件
+    if (in_array($basename, array('functions.php', 'security.php'))) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        die('403 Forbidden — 核心文件禁止直接访问');
+    }
+}
+
+/**
  * 页面加载时调用，执行所有安全检测
  * @param bool $isAdminPage 是否为管理后台页面
  */
 function securityBootstrap($isAdminPage = false) {
+    // 始终拦截敏感文件（不区分内外网，这是基础安全）
+    blockSensitiveFiles();
+
     sendSecurityHeaders();
     checkIpAccess();
 
