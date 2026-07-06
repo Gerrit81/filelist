@@ -425,8 +425,12 @@ function blockSensitiveFiles() {
         die('403 Forbidden — 配置文件禁止直接访问');
     }
 
-    // 拦截核心 PHP 文件
+    // 拦截核心 PHP 文件（仅拦截根目录的，admin/ 同名文件不受影响）
     if (in_array($basename, array('functions.php', 'security.php'))) {
+        // admin/ 下的 security.php 是后台页面，不应拦截
+        if ($basename === 'security.php' && preg_match('#^/admin/#i', $uri)) {
+            return;
+        }
         http_response_code(403);
         header('Content-Type: text/plain; charset=utf-8');
         die('403 Forbidden — 核心文件禁止直接访问');

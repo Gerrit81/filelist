@@ -7,6 +7,13 @@ $pageTitle = '📋 更新日志';
 // 更新日志数据库 — 每次发版在此追加记录
 $changelog = array(
     array(
+        'version' => '2.9.3',
+        'date'    => '2026-07-06',
+        'changes' => array(
+            '🐛 修复后台「安全审计」页面 403 错误：blockSensitiveFiles() 误拦截 admin/security.php',
+        ),
+    ),
+    array(
         'version' => '2.9.2',
         'date'    => '2026-07-05',
         'changes' => array(
