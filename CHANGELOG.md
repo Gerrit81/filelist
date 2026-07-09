@@ -1,5 +1,26 @@
 # 更新日志 (CHANGELOG)
 
+## v2.9.6 (2026-07-09)
+
+### 修复
+- 🐛 IIS 下访问报「No input file specified.」：`web.config` 添加 `defaultDocument` 确保 index.php 作为默认文档
+
+---
+
+## v2.9.5 (2026-07-09)
+
+### 修复
+- 🐛 修复 125% 显示缩放下操作列按钮文字被截断显示"..."的问题：操作列移除 `text-overflow: ellipsis`
+
+---
+
+## v2.9.4 (2026-07-07)
+
+### 增强
+- 🔧 数据目录验证：当 `open_basedir` 限制导致无法读取时，用 shell 检测目录是否真实存在，并提供群晖 WebStation 明确的修复指引
+
+---
+
 ## v2.9.3 (2026-07-06)
 
 ### 修复

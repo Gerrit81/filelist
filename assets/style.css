@@ -247,10 +247,15 @@ header p {
 .file-table th:nth-child(5),
 .file-table td:nth-child(2),
 .file-table td:nth-child(3),
-.file-table td:nth-child(4),
-.file-table td:nth-child(5) {
+/* 修改时间列：允许截断省略 */
+.file-table td:nth-child(4) {
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 操作列：禁止截断，按钮必须完整可见 */
+.file-table td:nth-child(5) {
     white-space: nowrap;
 }
 

@@ -70,12 +70,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $config['data_dir'] = normalizeConfigPath($newDataDir);
             } else {
                 $basedir = ini_get('open_basedir');
-                $detail = '目录不存在或无法读取。';
+                // 当 open_basedir 生效时，用 shell 确认目录是否真实存在
+                $dirOnDisk = false;
                 if (!empty($basedir)) {
-                    $detail .= ' 当前 PHP open_basedir 限制为：' . $basedir . '，请确认目标目录在该范围内。';
+                    if (function_exists('shell_exec') && stripos(ini_get('disable_functions'), 'shell_exec') === false) {
+                        $escp = escapeshellarg($newDataDir);
+                        $test = @shell_exec("test -d {$escp} && echo 1 2>/dev/null");
+                        $dirOnDisk = (trim((string)$test) === '1');
+                    }
                 }
-                $message = '数据目录无效：' . $detail;
-                $messageType = 'error';
+
+                if ($dirOnDisk) {
+                    // 目录确实存在，但 open_basedir 挡住了
+                    $message = '数据目录无效：<strong>目录在服务器上存在，但被 PHP open_basedir 限制无法访问。</strong>'
+                        . '<br><br>当前 open_basedir：<code>' . htmlspecialchars($basedir) . '</code>'
+                        . '<br><br><strong>解决方法（选其一）：</strong>'
+                        . '<br>① WebStation → PHP 设置 → 核心设置 → open_basedir，追加 <code>:' . htmlspecialchars($newDataDir) . '</code>'
+                        . '<br>② SSH 执行：<code>ln -s ' . htmlspecialchars($newDataDir) . ' ' . htmlspecialchars(__DIR__ . '/../data_link') . '</code>，然后将数据目录设为 <code>' . htmlspecialchars(__DIR__ . '/../data_link') . '</code>';
+                    $messageType = 'error';
+                } else {
+                    $detail = '目录不存在或无法读取。';
+                    if (!empty($basedir)) {
+                        $detail .= ' 当前 PHP open_basedir 限制为：' . $basedir . '，请确认目标目录在该范围内。';
+                    }
+                    $message = '数据目录无效：' . $detail;
+                    $messageType = 'error';
+                }
             }
         } elseif (!is_dir($newDataDir)) {
             $message = '数据目录无效：该路径存在但不是目录（可能是文件）';

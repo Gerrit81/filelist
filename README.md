@@ -208,5 +208,5 @@ MIT License
 
 ---
 
-**版本**: v2.9.2  
+**版本**: v2.9.3  
 **技术栈**: PHP + SQLite + 原生 JavaScript (无框架)

@@ -7,6 +7,27 @@ $pageTitle = '📋 更新日志';
 // 更新日志数据库 — 每次发版在此追加记录
 $changelog = array(
     array(
+        'version' => '2.9.6',
+        'date'    => '2026-07-09',
+        'changes' => array(
+            '🐛 IIS 下访问报「No input file specified.」：web.config 添加 defaultDocument',
+        ),
+    ),
+    array(
+        'version' => '2.9.5',
+        'date'    => '2026-07-09',
+        'changes' => array(
+            '🐛 修复 125% 显示缩放下操作列按钮文字被截断显示"…"的问题',
+        ),
+    ),
+    array(
+        'version' => '2.9.4',
+        'date'    => '2026-07-07',
+        'changes' => array(
+            '🔧 数据目录验证增强：open_basedir 限制时自动检测并提供修复指引',
+        ),
+    ),
+    array(
         'version' => '2.9.3',
         'date'    => '2026-07-06',
         'changes' => array(
