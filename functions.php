@@ -658,6 +658,173 @@ function safeBasename($filePath) {
     return $name;
 }
 
+/**
+ * 递归列出数据目录下的所有子目录（任意层级）。
+ * 供后台「上传目标目录 / 新建文件夹父目录 / 粘贴目标目录」等下拉选择使用。
+ * 此前只扫描一层，导致二级及更深目录无法选择。
+ *
+ * @param string $base     起始相对路径（'' 表示数据根目录）
+ * @param int    $maxDepth 最大递归深度，避免超大目录树拖慢页面
+ * @param int    $depth    当前层级（内部递归使用）
+ * @return array 每项含 name(末级名) / path(相对路径) / depth(层级) / label(带缩进的显示名)
+ */
+function getAllDirectories($base = '', $maxDepth = 6, $depth = 1) {
+    $result = array();
+    if ($depth > $maxDepth) {
+        return $result;
+    }
+
+    $base = trim($base, '/\\');
+    $fullPath = getFullPath($base);
+    if (!is_dir($fullPath)) {
+        return $result;
+    }
+
+    $dh = @opendir($fullPath);
+    if ($dh === false) {
+        return $result;
+    }
+
+    $children = array();
+    while (($file = readdir($dh)) !== false) {
+        if ($file === '.' || $file === '..') {
+            continue;
+        }
+        $file = sysToUtf8($file);
+        $fp = $fullPath . DIRECTORY_SEPARATOR . $file;
+        if (is_dir($fp) && !is_link($fp)) {
+            $children[] = array(
+                'name' => $file,
+                'path' => ($base === '' ? '' : $base . '/') . $file,
+            );
+        }
+    }
+    closedir($dh);
+
+    // 同级按名称排序（不区分大小写，与前台列表一致）
+    usort($children, function ($a, $b) {
+        return strcmp(strtolower($a['name']), strtolower($b['name']));
+    });
+
+    foreach ($children as $child) {
+        $indent = str_repeat('　', $depth - 1) . ($depth > 1 ? '└ ' : '');
+        $result[] = array(
+            'name'  => $child['name'],
+            'path'  => $child['path'],
+            'depth' => $depth,
+            'label' => $indent . $child['name'],
+        );
+        // 递归子目录
+        $result = array_merge($result, getAllDirectories($child['path'], $maxDepth, $depth + 1));
+    }
+
+    return $result;
+}
+
+/**
+ * 目标路径已存在时，自动生成不冲突的新路径：xxx_(1).ext
+ *
+ * @param string $destPath 期望的目标绝对路径
+ * @return string 可用的目标绝对路径
+ */
+function uniqueDestPath($destPath) {
+    if (!file_exists($destPath)) {
+        return $destPath;
+    }
+    $parent = dirname($destPath);
+    $base = basename($destPath);
+    $pathInfo = pathinfo($base);
+    $baseName = isset($pathInfo['filename']) ? $pathInfo['filename'] : $base;
+    $ext = isset($pathInfo['extension']) ? '.' . $pathInfo['extension'] : '';
+
+    $counter = 1;
+    do {
+        $candidate = $parent . DIRECTORY_SEPARATOR . $baseName . '_(' . $counter . ')' . $ext;
+        $counter++;
+    } while (file_exists($candidate));
+
+    return $candidate;
+}
+
+/**
+ * 递归复制文件或目录。
+ *
+ * @param string $src 源绝对路径
+ * @param string $dst 目标绝对路径
+ * @return bool
+ */
+function copyPathRecursive($src, $dst) {
+    if (is_dir($src) && !is_link($src)) {
+        if (!is_dir($dst) && !@mkdir($dst, 0755, true)) {
+            return false;
+        }
+        $dh = @opendir($src);
+        if ($dh === false) {
+            return false;
+        }
+        $ok = true;
+        while (($file = readdir($dh)) !== false) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            $s = $src . DIRECTORY_SEPARATOR . $file;
+            $d = $dst . DIRECTORY_SEPARATOR . $file;
+            if (is_dir($s) && !is_link($s)) {
+                $ok = copyPathRecursive($s, $d) && $ok;
+            } else {
+                $ok = @copy($s, $d) && $ok;
+            }
+        }
+        closedir($dh);
+        return $ok;
+    }
+    return @copy($src, $dst);
+}
+
+/**
+ * 递归删除文件或目录。
+ *
+ * @param string $path 绝对路径
+ * @return bool
+ */
+function deletePathRecursive($path) {
+    if (is_dir($path) && !is_link($path)) {
+        $it = new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS);
+        $files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($files as $file) {
+            $real = $file->getRealPath();
+            if ($real === false) {
+                continue;
+            }
+            if ($file->isDir()) {
+                @rmdir($real);
+            } else {
+                @unlink($real);
+            }
+        }
+        return @rmdir($path);
+    }
+    return @unlink($path);
+}
+
+/**
+ * 移动文件或目录。rename() 在跨分区/跨盘符时会失败，
+ * 失败后自动回退为「递归复制 + 删除源」。
+ *
+ * @param string $src 源绝对路径
+ * @param string $dst 目标绝对路径
+ * @return bool
+ */
+function movePathSafe($src, $dst) {
+    if (@rename($src, $dst)) {
+        return true;
+    }
+    if (!copyPathRecursive($src, $dst)) {
+        return false;
+    }
+    return deletePathRecursive($src);
+}
+
 function getFileInfo($filePath, $relativePath, $displayName = null) {
     $info = array();
     $info['name'] = $displayName !== null ? $displayName : safeBasename($filePath);
@@ -1199,6 +1366,7 @@ function getDefaultPermissionSet() {
         'files'         => false,
         'files_rename'  => false,
         'files_delete'  => false,
+        'files_move'    => false,
         'downloads'     => false,
         'hidden'        => false,
         'settings'      => false,

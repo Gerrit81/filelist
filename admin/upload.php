@@ -6,34 +6,12 @@ $pageTitle = '📤 文件上传';
 $message = '';
 $messageType = 'success';
 
+/**
+ * 列出可选目录：递归包含所有层级子目录。
+ * 此前只扫描一层，导致二级及更深的目录无法在上传/新建文件夹时选择。
+ */
 function getDirectories($path = '') {
-    $fullPath = getFullPath($path);
-    if (!is_dir($fullPath)) {
-        return array();
-    }
-
-    $dirs = array();
-    $dh = opendir($fullPath);
-
-    while (($file = readdir($dh)) !== false) {
-        if ($file === '.' || $file === '..') {
-            continue;
-        }
-
-        $file = sysToUtf8($file);
-        $filePath = $fullPath . DIRECTORY_SEPARATOR . $file;
-        if (is_dir($filePath) && !is_link($filePath)) {
-            $dirs[] = array(
-                'name' => $file,
-                'path' => empty($path) ? $file : $path . '/' . $file
-            );
-        }
-    }
-
-    closedir($dh);
-    sort($dirs);
-
-    return $dirs;
+    return getAllDirectories($path);
 }
 
 // ── AJAX 上传处理器 ──
@@ -250,10 +228,11 @@ if (empty($userFolders)) {
 
             <div class="form-item">
                 <label for="sub_dir">目标目录</label>
+                <input type="text" id="subDirFilter" placeholder="搜索目录（目录较多时可快速定位）" style="padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; width:240px; margin-bottom:6px;">
                 <select id="sub_dir" name="sub_dir">
                     <option value="">根目录</option>
                     <?php foreach ($availableDirs as $dir): ?>
-                        <option value="<?php echo htmlspecialchars($dir['path']); ?>"><?php echo htmlspecialchars($dir['name']); ?></option>
+                        <option value="<?php echo htmlspecialchars($dir['path']); ?>"><?php echo htmlspecialchars(isset($dir['label']) ? $dir['label'] : $dir['name']); ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -313,10 +292,11 @@ if (empty($userFolders)) {
 
                 <div class="form-item">
                     <label for="folder_parent">父目录</label>
+                    <input type="text" id="folderParentFilter" placeholder="搜索目录（目录较多时可快速定位）" style="padding:8px 10px; border:1px solid #ddd; border-radius:6px; font-size:13px; width:240px; margin-bottom:6px;">
                     <select id="folder_parent" name="folder_parent">
                         <option value="">根目录</option>
                         <?php foreach ($allDirs as $dir): ?>
-                            <option value="<?php echo htmlspecialchars($dir['path']); ?>"><?php echo htmlspecialchars($dir['name']); ?></option>
+                            <option value="<?php echo htmlspecialchars($dir['path']); ?>"><?php echo htmlspecialchars(isset($dir['label']) ? $dir['label'] : $dir['name']); ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -538,6 +518,10 @@ if (empty($userFolders)) {
 
             xhr.send(formData);
         });
+
+        // 目录下拉搜索过滤
+        attachSelectFilter('subDirFilter', 'sub_dir');
+        attachSelectFilter('folderParentFilter', 'folder_parent');
     })();
     </script>
 </body>

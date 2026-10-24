@@ -44,7 +44,19 @@ function userPermissions() {
 
 function hasPermission($perm) {
     $perms = userPermissions();
-    return isset($perms[$perm]) && $perms[$perm] === true;
+    if (isset($perms[$perm])) {
+        return $perms[$perm] === true;
+    }
+    // 升级前已有的角色，其权限数据里没有后加的权限键；
+    // 这里给出回退关系，避免升级后旧角色突然失去功能（管理员仍可在角色管理中显式配置）
+    $fallbackMap = array(
+        'files_move' => 'files_rename',
+    );
+    if (isset($fallbackMap[$perm])) {
+        $fallback = $fallbackMap[$perm];
+        return isset($perms[$fallback]) && $perms[$fallback] === true;
+    }
+    return false;
 }
 
 function currentUserMaxUpload() {

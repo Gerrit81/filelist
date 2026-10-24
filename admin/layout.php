@@ -118,6 +118,12 @@ $pageTitle = isset($pageTitle) ? $pageTitle : '管理后台';
         .file-manager-toolbar .btn-primary { padding: 8px 16px; font-size: 13px; }
         .file-actions form { display: inline; }
 
+        /* 剪贴板状态条（复制/剪切后显示） */
+        .clipboard-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 15px; padding: 10px 14px; background: #e7f1ff; border: 1px solid #74b9ff; border-radius: 8px; }
+        .clipboard-info { font-size: 13px; color: #0b5394; }
+        .clipboard-bar select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; max-width: 280px; }
+        .clipboard-bar .btn-primary { font-size: 13px; padding: 6px 14px; }
+
         /* 批量操作栏 */
         .bulk-bar { display: inline-flex; gap: 8px; align-items: center; margin-left: auto; padding: 6px 14px; background: #fff3cd; border-radius: 8px; border: 1px solid #ffc107; }
         .bulk-count { font-size: 13px; font-weight: 600; color: #856404; }
@@ -156,6 +162,30 @@ $pageTitle = isset($pageTitle) ? $pageTitle : '管理后台';
         .perm-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: #667eea; cursor: pointer; }
     </style>
     <script>
+    // 目录下拉搜索过滤：数据目录层级/数量很多时快速定位目标目录
+    // 始终保留第一项（根目录 / 当前目录），避免过滤后丢失默认选项
+    function attachSelectFilter(inputId, selectId) {
+        var input = document.getElementById(inputId);
+        var select = document.getElementById(selectId);
+        if (!input || !select) return;
+        var opts = Array.prototype.slice.call(select.options);
+        input.addEventListener('input', function () {
+            var kw = this.value.trim().toLowerCase();
+            select.innerHTML = '';
+            opts.forEach(function (o, i) {
+                if (i === 0 || kw === '' || o.text.toLowerCase().indexOf(kw) !== -1) {
+                    select.appendChild(o);
+                }
+            });
+            if (select.options.length === 0) {
+                var none = document.createElement('option');
+                none.value = '';
+                none.textContent = '（无匹配目录）';
+                select.appendChild(none);
+            }
+        });
+    }
+
     // CSRF 防护：自动给所有 POST 表单注入 token
     document.addEventListener('DOMContentLoaded', function() {
         var token = '<?php echo $_SESSION["csrf_token"]; ?>';

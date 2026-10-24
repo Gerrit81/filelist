@@ -171,6 +171,146 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $messageType = 'error';
         }
     }
+
+    // ── 复制所选到剪贴板 ──
+    elseif (isset($_POST['copy_selected']) && hasPermission('files_move')) {
+        $targets = isset($_POST['targets']) ? (array)$_POST['targets'] : array();
+        $items = array();
+        $names = array();
+        foreach ($targets as $t) {
+            $t = trim($t);
+            if ($t === '') continue;
+            $fp = getFullPath($t);
+            if (isSafePath($fp) && file_exists($fp)) {
+                $items[] = $t;
+                $names[] = safeBasename($fp);
+            }
+        }
+        if (empty($items)) {
+            $message = '复制失败：未选中有效文件';
+            $messageType = 'error';
+        } else {
+            $_SESSION['file_clipboard'] = array(
+                'action' => 'copy',
+                'items'  => $items,
+                'names'  => $names,
+                'time'   => time(),
+            );
+            $message = '已复制 ' . count($items) . ' 项，请到目标目录点击「粘贴到此处」';
+        }
+    }
+
+    // ── 剪切所选到剪贴板 ──
+    elseif (isset($_POST['cut_selected']) && hasPermission('files_move')) {
+        $targets = isset($_POST['targets']) ? (array)$_POST['targets'] : array();
+        $items = array();
+        $names = array();
+        foreach ($targets as $t) {
+            $t = trim($t);
+            if ($t === '') continue;
+            $fp = getFullPath($t);
+            if (isSafePath($fp) && file_exists($fp)) {
+                $items[] = $t;
+                $names[] = safeBasename($fp);
+            }
+        }
+        if (empty($items)) {
+            $message = '剪切失败：未选中有效文件';
+            $messageType = 'error';
+        } else {
+            $_SESSION['file_clipboard'] = array(
+                'action' => 'cut',
+                'items'  => $items,
+                'names'  => $names,
+                'time'   => time(),
+            );
+            $message = '已剪切 ' . count($items) . ' 项，请到目标目录点击「粘贴到此处」完成移动';
+        }
+    }
+
+    // ── 清空剪贴板 ──
+    elseif (isset($_POST['clear_clipboard'])) {
+        unset($_SESSION['file_clipboard']);
+        $message = '已清空剪贴板';
+    }
+
+    // ── 粘贴（复制/移动）到目标目录 ──
+    elseif (isset($_POST['paste']) && hasPermission('files_move')) {
+        $clip = isset($_SESSION['file_clipboard']) ? $_SESSION['file_clipboard'] : null;
+
+        if (empty($clip['items'])) {
+            $message = '粘贴失败：剪贴板为空，请先复制或剪切文件';
+            $messageType = 'error';
+        } else {
+            $destRel  = isset($_POST['dest_dir']) ? trim($_POST['dest_dir'], '/\\') : '';
+            $destFull = getFullPath($destRel);
+
+            if (!isSafePath($destFull) || !is_dir($destFull)) {
+                $message = '粘贴失败：目标目录无效';
+                $messageType = 'error';
+            } else {
+                $isCut = (isset($clip['action']) && $clip['action'] === 'cut');
+                $successCount = 0;
+                $failCount = 0;
+                $failReasons = array();
+                $destRealBase = realpath($destFull);
+
+                foreach ($clip['items'] as $rel) {
+                    $srcFull = getFullPath($rel);
+                    if (!isSafePath($srcFull) || !file_exists($srcFull)) {
+                        $failCount++;
+                        continue;
+                    }
+
+                    $srcReal = realpath($srcFull);
+
+                    // 禁止把目录移动/复制到它自己内部（会造成无限递归）
+                    if (is_dir($srcFull) && $srcReal !== false && $destRealBase !== false
+                        && ($destRealBase === $srcReal
+                            || strpos($destRealBase . DIRECTORY_SEPARATOR, $srcReal . DIRECTORY_SEPARATOR) === 0)) {
+                        $failCount++;
+                        $failReasons[] = safeBasename($srcFull) . '：不能移动到自己或其子目录内';
+                        continue;
+                    }
+
+                    $name    = basename($srcFull);
+                    $dstFull = uniqueDestPath($destFull . DIRECTORY_SEPARATOR . $name);
+
+                    if ($srcFull === $dstFull) {
+                        $failCount++;
+                        $failReasons[] = $name . '：源与目标相同';
+                        continue;
+                    }
+
+                    $ok = $isCut ? movePathSafe($srcFull, $dstFull) : copyPathRecursive($srcFull, $dstFull);
+                    if ($ok) {
+                        $successCount++;
+                    } else {
+                        $failCount++;
+                        $failReasons[] = $name . '：' . ($isCut ? '移动失败' : '复制失败');
+                    }
+                }
+
+                $message = ($isCut ? '移动' : '复制') . "完成：成功 {$successCount} 个";
+                if ($failCount > 0) {
+                    $message .= "，失败 {$failCount} 个";
+                    $messageType = 'error';
+                    if (!empty($failReasons)) {
+                        $message .= '（' . implode('；', array_slice($failReasons, 0, 3)) . '）';
+                    }
+                }
+
+                // 剪切是一次性操作，完成后清空剪贴板
+                if ($isCut) {
+                    unset($_SESSION['file_clipboard']);
+                }
+
+                // 源目录与目标目录的缓存都要失效
+                clearDirCache();
+                clearStatsCache();
+            }
+        }
+    }
 }
 
 // 扫描当前目录
@@ -211,6 +351,16 @@ if (!empty($currentPath)) {
         $breadcrumbs[] = array('name' => $part, 'path' => $cumPath);
     }
 }
+
+// 剪贴板状态（复制/剪切）
+$clipboard = isset($_SESSION['file_clipboard']) ? $_SESSION['file_clipboard'] : null;
+
+// 递归目录列表（粘贴目标下拉使用，含二级及更深目录）
+// 仅在剪贴板非空时才扫描，避免目录树很大时每次进页面都全量递归
+$allDirs = (!empty($clipboard['items']) && hasPermission('files_move')) ? getAllDirectories() : array();
+
+// 是否显示复选框：拥有删除或移动/复制任一权限即可勾选
+$canSelect = hasPermission('files_delete') || hasPermission('files_move');
 ?>
 <?php require __DIR__ . '/layout.php'; ?>
 
@@ -225,14 +375,48 @@ if (!empty($currentPath)) {
                     <button type="submit" name="fix_illegal_names" class="btn-sm btn-edit">🔧 修复非法文件名</button>
                 </form>
                 <?php endif; ?>
-                <?php if (hasPermission('files_delete')): ?>
+                <?php if ($canSelect): ?>
                 <span class="bulk-bar" id="bulkBar" style="display:none;">
                     <span class="bulk-count" id="bulkCount">已选 0 项</span>
+                    <?php if (hasPermission('files_move')): ?>
+                    <button type="button" class="btn-sm btn-edit" id="bulkCopyBtn">📋 复制</button>
+                    <button type="button" class="btn-sm btn-edit" id="bulkCutBtn">✂ 剪切</button>
+                    <?php endif; ?>
+                    <?php if (hasPermission('files_delete')): ?>
                     <button type="button" class="btn-danger" id="bulkDeleteBtn">🗑 批量删除</button>
+                    <?php endif; ?>
                     <button type="button" class="btn-sm btn-edit" id="bulkClearBtn">取消选择</button>
                 </span>
                 <?php endif; ?>
             </div>
+
+            <?php if (!empty($clipboard['items']) && hasPermission('files_move')): ?>
+            <div class="clipboard-bar">
+                <span class="clipboard-info">
+                    <?php echo ($clipboard['action'] === 'cut') ? '✂ 已剪切' : '📋 已复制'; ?>
+                    <strong><?php echo count($clipboard['items']); ?></strong> 项：
+                    <?php
+                        $shown = array_slice($clipboard['names'], 0, 3);
+                        echo htmlspecialchars(implode('、', $shown));
+                        echo (count($clipboard['names']) > 3) ? ' 等' : '';
+                    ?>
+                </span>
+                <form method="post" style="display:inline-flex; align-items:center; gap:8px;">
+                    <input type="text" id="destDirFilter" placeholder="搜索目录..." style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; width:150px;">
+                    <select name="dest_dir" id="dest_dir" title="选择粘贴的目标目录">
+                        <option value="<?php echo htmlspecialchars($currentPath); ?>">📍 当前目录（<?php echo htmlspecialchars($currentPath ?: '根目录'); ?>）</option>
+                        <?php foreach ($allDirs as $dir): ?>
+                            <?php if ($dir['path'] === $currentPath) continue; ?>
+                            <option value="<?php echo htmlspecialchars($dir['path']); ?>"><?php echo htmlspecialchars(isset($dir['label']) ? $dir['label'] : $dir['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" name="paste" class="btn-primary">📥 粘贴到此处</button>
+                </form>
+                <form method="post" style="display:inline;">
+                    <button type="submit" name="clear_clipboard" class="btn-sm btn-edit">清空剪贴板</button>
+                </form>
+            </div>
+            <?php endif; ?>
 
             <div class="breadcrumbs" style="margin-bottom:15px;">
                 <ul>
@@ -254,7 +438,7 @@ if (!empty($currentPath)) {
             <table class="file-admin-table">
                 <thead>
                     <tr>
-                        <?php if (hasPermission('files_delete')): ?>
+                        <?php if ($canSelect): ?>
                         <th style="width:40px;"><input type="checkbox" id="selectAll" title="全选/取消"></th>
                         <?php endif; ?>
                         <th class="file-name-col">名称</th>
@@ -265,11 +449,11 @@ if (!empty($currentPath)) {
                 </thead>
                 <tbody>
                     <?php if (empty($items)): ?>
-                        <tr><td colspan="<?php echo hasPermission('files_delete') ? 5 : 4; ?>" style="text-align:center;color:#999;padding:30px;">此目录为空</td></tr>
+                        <tr><td colspan="<?php echo $canSelect ? 5 : 4; ?>" style="text-align:center;color:#999;padding:30px;">此目录为空</td></tr>
                     <?php else: ?>
                         <?php foreach ($items as $item): ?>
                         <tr class="file-row">
-                            <?php if (hasPermission('files_delete')): ?>
+                            <?php if ($canSelect): ?>
                             <td style="text-align:center;"><input type="checkbox" class="item-check" data-path="<?php echo htmlspecialchars($item['path']); ?>" data-name="<?php echo htmlspecialchars($item['name']); ?>"></td>
                             <?php endif; ?>
                             <td class="file-name-td">
@@ -310,6 +494,14 @@ if (!empty($currentPath)) {
         <div id="bulkTargetsContainer"></div>
     </form>
 
+    <!-- 复制/剪切隐藏表单 -->
+    <?php if (hasPermission('files_move')): ?>
+    <form method="post" id="bulkActionForm">
+        <div id="bulkActionInputs"></div>
+        <div id="bulkActionTargets"></div>
+    </form>
+    <?php endif; ?>
+
     <!-- 重命名弹窗 -->
     <div class="modal-overlay" id="renameModal" style="display:none;">
         <div class="modal-box">
@@ -346,7 +538,7 @@ if (!empty($currentPath)) {
     });
 
     // 批量选择相关
-    <?php if (hasPermission('files_delete')): ?>
+    <?php if ($canSelect): ?>
     var selectAll = document.getElementById('selectAll');
     var itemChecks = document.querySelectorAll('.item-check');
     var bulkBar = document.getElementById('bulkBar');
@@ -409,6 +601,51 @@ if (!empty($currentPath)) {
         bulkDeleteForm.submit();
     });
     <?php endif; ?>
+
+    <?php if (hasPermission('files_move')): ?>
+    // 复制 / 剪切到剪贴板
+    var bulkActionForm = document.getElementById('bulkActionForm');
+    var bulkActionInputs = document.getElementById('bulkActionInputs');
+    var bulkActionTargets = document.getElementById('bulkActionTargets');
+
+    function submitBulkAction(actionName) {
+        var checked = document.querySelectorAll('.item-check:checked');
+        if (checked.length === 0) return;
+
+        bulkActionInputs.innerHTML = '';
+        bulkActionTargets.innerHTML = '';
+
+        var act = document.createElement('input');
+        act.type = 'hidden';
+        act.name = actionName;
+        act.value = '1';
+        bulkActionInputs.appendChild(act);
+
+        checked.forEach(function (cb) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'targets[]';
+            input.value = cb.dataset.path;
+            bulkActionTargets.appendChild(input);
+        });
+
+        bulkActionForm.submit();
+    }
+
+    document.getElementById('bulkCopyBtn').addEventListener('click', function () {
+        submitBulkAction('copy_selected');
+    });
+
+    document.getElementById('bulkCutBtn').addEventListener('click', function () {
+        var checked = document.querySelectorAll('.item-check:checked');
+        if (checked.length === 0) return;
+        if (!confirm('剪切后需到目标目录点击「粘贴到此处」才会真正移动。\n\n确定剪切这 ' + checked.length + ' 项？')) return;
+        submitBulkAction('cut_selected');
+    });
+    <?php endif; ?>
+
+    // 粘贴目标目录搜索过滤
+    attachSelectFilter('destDirFilter', 'dest_dir');
     </script>
 </body>
 </html>

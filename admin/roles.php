@@ -13,6 +13,7 @@ $permLabels = array(
     'files'         => '文件管理（查看）',
     'files_rename'  => '文件管理（重命名）',
     'files_delete'  => '文件管理（删除）',
+    'files_move'    => '文件管理（复制/移动）',
     'downloads'     => '下载历史',
     'hidden'        => '隐藏文件管理',
     'settings'      => '系统设置',
